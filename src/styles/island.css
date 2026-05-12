@@ -1,0 +1,173 @@
+.stage {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  place-items: start center;
+  background: transparent;
+  user-select: none;
+}
+
+.stage.is-expanded {
+  background: transparent;
+}
+
+.island-shell {
+  position: relative;
+  overflow: hidden;
+  contain: layout paint style;
+  will-change: width, height, border-radius;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.04)),
+    rgba(18, 19, 21, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 -18px 34px rgba(0, 0, 0, 0.16);
+  transform: translateZ(0);
+  backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.stage:not(.is-expanded) .island-shell {
+  margin-top: 0;
+}
+
+.stage.is-dragging:not(.is-expanded) .island-shell {
+  margin-top: 0;
+}
+
+.stage.is-expanded .island-shell {
+  box-shadow:
+    0 22px 54px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 -18px 34px rgba(0, 0, 0, 0.16);
+}
+
+.island-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(74, 188, 179, 0.28), transparent 28%),
+    radial-gradient(circle at 74% 18%, rgba(245, 165, 75, 0.18), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 34%);
+  pointer-events: none;
+}
+
+.compact {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 13px 6px 7px;
+  background: transparent;
+  cursor: default;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+.stage.is-dragging:not(.is-expanded) .compact {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 0;
+}
+
+.stage.is-dragging:not(.is-expanded) .compact .now {
+  display: none;
+}
+
+.stage.is-dragging:not(.is-expanded) .compact .compact-grip {
+  display: none;
+}
+
+.stage.is-dragging:not(.is-expanded) .compact-toggle {
+  width: 44px;
+  height: 44px;
+  pointer-events: none;
+}
+
+.compact-grip {
+  width: 28px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.42);
+  cursor: grab;
+  app-region: drag;
+  -webkit-app-region: drag;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.compact-grip:hover {
+  background: rgba(91, 199, 242, 0.15);
+  color: rgba(143, 228, 255, 0.86);
+}
+
+.compact-grip:active {
+  cursor: grabbing;
+}
+
+.compact:active,
+.panel-header:active,
+.hero-row:active {
+  cursor: grabbing;
+}
+
+.signal,
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #32c8bd, #f5a54b);
+  color: #08100f;
+  box-shadow: 0 10px 26px rgba(50, 200, 189, 0.22);
+}
+
+.compact-toggle {
+  padding: 0;
+  cursor: pointer;
+}
+
+.compact-text,
+.brand span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.compact-text strong,
+.brand strong {
+  font-size: 14px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.compact-text small,
+.brand small,
+.file-main small {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.now {
+  min-width: 0;
+  height: 30px;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}

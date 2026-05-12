@@ -1,0 +1,7 @@
+Windowsill
+
+Windowsill is a desktop companion inspired by the Dynamic Island experience. It stays as a small floating capsule on Windows and can expand into a workspace for AI chat, file staging, quick directory access, screenshots, OCR, clipboard tools, translation, and focus timers.
+
+During installation you can choose the install location and decide whether to create shortcuts.
+
+The app stores its local state on this computer, including staged file metadata, shortcut directories, focus timer state, and clipboard history used by the assistant. AI features use the API provider configured in your .env file.

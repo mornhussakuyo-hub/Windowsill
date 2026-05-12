@@ -1,0 +1,72 @@
+{
+  "name": "windowsill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A polished Dynamic Island inspired desktop companion for Windows.",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && node electron/start-dev.cjs\"",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "keywords": [
+    "electron",
+    "windows",
+    "dynamic-island",
+    "assistant"
+  ],
+  "author": "mornhussakuyo-hub",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mornhussakuyo-hub/Windowsill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mornhussakuyo-hub/Windowsill/issues"
+  },
+  "homepage": "https://github.com/mornhussakuyo-hub/Windowsill#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12",
+    "framer-motion": "^12.23.26",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vite": "^7.2.7",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "studio.windowsill.app",
+    "productName": "Windowsill",
+    "files": [
+      "dist/**",
+      "electron/**"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Windowsill",
+      "runAfterFinish": true,
+      "license": "build/installer-about.txt",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "uninstallDisplayName": "Windowsill"
+    }
+  }
+}
