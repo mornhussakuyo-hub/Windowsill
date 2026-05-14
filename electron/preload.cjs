@@ -18,7 +18,14 @@ contextBridge.exposeInMainWorld('windowsill', {
   chooseFiles: () => ipcRenderer.invoke('island:choose-files'),
   getPathForFile: (file) => webUtils.getPathForFile(file),
   ocrFile: (filePath) => ipcRenderer.invoke('island:ocr-file', filePath),
-  startFileDrag: (filePath) => ipcRenderer.send('island:start-file-drag', filePath),
+  startFileDrag: (filePath) => {
+    try {
+      return ipcRenderer.sendSync('island:start-file-drag-sync', filePath);
+    } catch (error) {
+      ipcRenderer.send('island:start-file-drag', filePath);
+      return { ok: false, error: error.message, fallback: true };
+    }
+  },
   getClipboardHistory: () => ipcRenderer.invoke('clipboard:get-history'),
   writeClipboardItem: (itemId) => ipcRenderer.invoke('clipboard:write-item', itemId),
   stageClipboardImage: (itemId) => ipcRenderer.invoke('clipboard:stage-image', itemId),

@@ -16,6 +16,7 @@ const { execFile } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { fileURLToPath } = require('url');
 const { runWindowsillAgent } = require('./agent/windowsillAgent.cjs');
 const { createClipboardRepository } = require('./repositories/clipboardRepository.cjs');
 require('dotenv').config({ path: path.join(process.cwd(), '.env'), quiet: true });
@@ -52,7 +53,9 @@ let suppressAutoCollapseUntil = 0;
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 let appSettings = {
   autoCollapseOnBlur: true,
-  alwaysOnTop: true
+  alwaysOnTop: true,
+  hotkey: 'Alt+Space',
+  ai: {}
 };
 
 function writeBootLog(message) {
@@ -134,32 +137,93 @@ function saveState(nextState) {
   fs.writeFileSync(statePath(), JSON.stringify({ ...current, ...nextState }, null, 2));
 }
 
+function defaultAiSettings() {
+  return {
+    provider: process.env.WINDOWSILL_AI_PROVIDER || 'DeepSeek',
+    apiKey: process.env.WINDOWSILL_AI_KEY || process.env.OPENAI_API_KEY || '',
+    baseUrl: process.env.WINDOWSILL_AI_BASE_URL || 'https://api.deepseek.com/v1',
+    model: process.env.WINDOWSILL_AI_MODEL || process.env.OPENAI_MODEL || 'deepseek-chat',
+    temperature: Number.isFinite(Number(process.env.WINDOWSILL_AI_TEMPERATURE))
+      ? Number(process.env.WINDOWSILL_AI_TEMPERATURE)
+      : 0.6
+  };
+}
+
+function normalizeTemperature(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0.6;
+  return Math.min(2, Math.max(0, Math.round(numeric * 100) / 100));
+}
+
 function getStoredSettings() {
   const stored = loadState().settings || {};
+  const storedAi = stored.ai || {};
+  const defaults = defaultAiSettings();
   return {
     autoCollapseOnBlur: stored.autoCollapseOnBlur !== false,
     alwaysOnTop: stored.alwaysOnTop !== false,
-    launchAtLogin: app.getLoginItemSettings().openAtLogin
+    launchAtLogin: app.getLoginItemSettings().openAtLogin,
+    hotkey: typeof stored.hotkey === 'string' && stored.hotkey.trim() ? stored.hotkey.trim() : 'Alt+Space',
+    ai: {
+      provider: typeof storedAi.provider === 'string' ? storedAi.provider : defaults.provider,
+      apiKey: Object.hasOwn(storedAi, 'apiKey') ? String(storedAi.apiKey || '') : defaults.apiKey,
+      baseUrl: typeof storedAi.baseUrl === 'string' && storedAi.baseUrl.trim() ? storedAi.baseUrl : defaults.baseUrl,
+      model: typeof storedAi.model === 'string' && storedAi.model.trim() ? storedAi.model : defaults.model,
+      temperature: normalizeTemperature(Object.hasOwn(storedAi, 'temperature') ? storedAi.temperature : defaults.temperature)
+    }
   };
 }
 
 function saveAppSettings(patch) {
+  const current = getStoredSettings();
   const next = {
-    ...appSettings,
-    ...patch
+    ...current,
+    ...patch,
+    ai: {
+      ...current.ai,
+      ...(patch.ai || {})
+    }
   };
-  appSettings = {
-    autoCollapseOnBlur: next.autoCollapseOnBlur !== false,
-    alwaysOnTop: next.alwaysOnTop !== false
-  };
-  saveState({ settings: appSettings });
+  next.autoCollapseOnBlur = next.autoCollapseOnBlur !== false;
+  next.alwaysOnTop = next.alwaysOnTop !== false;
+  next.hotkey = typeof next.hotkey === 'string' && next.hotkey.trim() ? next.hotkey.trim() : 'Alt+Space';
+  next.ai.temperature = normalizeTemperature(next.ai.temperature);
+  appSettings = next;
+  saveState({
+    settings: {
+      autoCollapseOnBlur: next.autoCollapseOnBlur,
+      alwaysOnTop: next.alwaysOnTop,
+      hotkey: next.hotkey,
+      ai: next.ai
+    }
+  });
   if (Object.hasOwn(patch, 'launchAtLogin')) {
     app.setLoginItemSettings({ openAtLogin: Boolean(patch.launchAtLogin) });
   }
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(Boolean(appSettings.alwaysOnTop), 'screen-saver');
   }
+  if (Object.hasOwn(patch, 'hotkey')) registerAppHotkey();
   return getStoredSettings();
+}
+
+function toggleWindowVisibility() {
+  if (!mainWindow) return;
+  if (mainWindow.isVisible() && !isHidden) requestHide();
+  else requestShow();
+}
+
+function registerAppHotkey() {
+  globalShortcut.unregisterAll();
+  const accelerator = appSettings.hotkey || 'Alt+Space';
+  const registered = globalShortcut.register(accelerator, toggleWindowVisibility);
+  if (!registered && accelerator !== 'Alt+Space') {
+    appSettings.hotkey = 'Alt+Space';
+    globalShortcut.register('Alt+Space', toggleWindowVisibility);
+    const current = loadState().settings || {};
+    saveState({ settings: { ...current, hotkey: 'Alt+Space' } });
+  }
+  return registered;
 }
 
 function launchDetached(command) {
@@ -327,6 +391,12 @@ function getDragIcon(filePath) {
 
   if (dragIcon && !dragIcon.isEmpty()) return dragIcon;
 
+  const appIcon = nativeImage.createFromPath(appIconPath);
+  if (appIcon && !appIcon.isEmpty()) {
+    dragIcon = appIcon.resize({ width: 48, height: 48 });
+    if (dragIcon && !dragIcon.isEmpty()) return dragIcon;
+  }
+
   dragIcon = nativeImage.createFromDataURL(
     'data:image/svg+xml;utf8,' +
       encodeURIComponent(`
@@ -346,6 +416,48 @@ function getDragIcon(filePath) {
   }
 
   return dragIcon;
+}
+
+function normalizeDragPath(filePath) {
+  const raw = String(filePath || '').trim().replace(/^["']|["']$/g, '');
+  if (!raw) return '';
+
+  if (/^file:\/\//i.test(raw)) {
+    try {
+      return fileURLToPath(raw);
+    } catch {
+      return '';
+    }
+  }
+
+  return path.resolve(raw);
+}
+
+function startNativeFileDrag(sender, filePath) {
+  const resolvedPath = normalizeDragPath(filePath);
+  if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+    const error = '文件不存在或路径已经失效。';
+    writeBootLog(`file drag failed missing path=${resolvedPath || filePath || ''}`);
+    return { ok: false, error, path: resolvedPath };
+  }
+
+  try {
+    const icon = getDragIcon(resolvedPath);
+    if (!icon || icon.isEmpty()) {
+      const error = '拖拽图标创建失败。';
+      writeBootLog(`file drag failed empty icon path=${resolvedPath}`);
+      return { ok: false, error, path: resolvedPath };
+    }
+
+    sender.startDrag({
+      file: resolvedPath,
+      icon
+    });
+    return { ok: true, path: resolvedPath };
+  } catch (error) {
+    writeBootLog(`file drag failed ${error?.stack || error?.message || error}`);
+    return { ok: false, error: error.message || '系统拖拽启动失败。', path: resolvedPath };
+  }
 }
 
 function runWindowsOcr(filePath) {
@@ -807,10 +919,12 @@ async function collectOcrContext(files) {
 }
 
 function getAiConfig() {
+  const ai = appSettings.ai || getStoredSettings().ai;
   return {
-    apiKey: process.env.WINDOWSILL_AI_KEY || process.env.OPENAI_API_KEY,
-    baseUrl: (process.env.WINDOWSILL_AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, ''),
-    model: process.env.WINDOWSILL_AI_MODEL || process.env.OPENAI_MODEL
+    apiKey: ai.apiKey || '',
+    baseUrl: (ai.baseUrl || 'https://api.deepseek.com/v1').replace(/\/$/, ''),
+    model: ai.model || 'deepseek-chat',
+    temperature: normalizeTemperature(ai.temperature)
   };
 }
 
@@ -844,7 +958,7 @@ function buildAiMessages(messages, files, ocrResults, agentContext) {
 function createAiRequestBody(config, messages, files, ocrResults, agentContext, stream = false) {
   return {
     model: config.model,
-    temperature: 0.6,
+    temperature: config.temperature,
     stream,
     messages: buildAiMessages(messages, files, ocrResults, agentContext)
   };
@@ -1222,7 +1336,7 @@ async function requestAiToolStep(config, messages) {
     },
     body: JSON.stringify({
       model: config.model,
-      temperature: 0.2,
+      temperature: Math.min(0.4, config.temperature),
       messages,
       tools: agentTools,
       tool_choice: 'auto'
@@ -1677,11 +1791,7 @@ app.whenReady().then(() => {
   });
   clipboardRepository.startWatcher();
 
-  globalShortcut.register('Alt+Space', () => {
-    if (!mainWindow) return;
-    if (mainWindow.isVisible() && !isHidden) requestHide();
-    else requestShow();
-  });
+  registerAppHotkey();
 
   ipcMain.handle('island:set-expanded', (_event, expanded) => {
     applyWindowMode(Boolean(expanded), false);
@@ -1747,6 +1857,14 @@ app.whenReady().then(() => {
     const cleanPatch = {};
     for (const key of ['autoCollapseOnBlur', 'alwaysOnTop', 'launchAtLogin']) {
       if (typeof patch[key] === 'boolean') cleanPatch[key] = patch[key];
+    }
+    if (typeof patch.hotkey === 'string') cleanPatch.hotkey = patch.hotkey;
+    if (patch.ai && typeof patch.ai === 'object') {
+      cleanPatch.ai = {};
+      for (const key of ['provider', 'apiKey', 'baseUrl', 'model']) {
+        if (typeof patch.ai[key] === 'string') cleanPatch.ai[key] = patch.ai[key];
+      }
+      if (Object.hasOwn(patch.ai, 'temperature')) cleanPatch.ai.temperature = patch.ai.temperature;
     }
     return {
       ok: true,
@@ -1815,20 +1933,11 @@ app.whenReady().then(() => {
   ipcMain.handle('island:ocr-file', async (_event, filePath) => runWindowsOcr(filePath));
 
   ipcMain.on('island:start-file-drag', (event, filePath) => {
-    if (!filePath || !fs.existsSync(filePath)) {
-      console.warn('File drag ignored: missing path', filePath);
-      return;
-    }
+    startNativeFileDrag(event.sender, filePath);
+  });
 
-    try {
-      console.log('Starting native file drag:', filePath);
-      event.sender.startDrag({
-        file: filePath,
-        icon: getDragIcon(filePath)
-      });
-    } catch (error) {
-      console.warn('Failed to start file drag:', error.message);
-    }
+  ipcMain.on('island:start-file-drag-sync', (event, filePath) => {
+    event.returnValue = startNativeFileDrag(event.sender, filePath);
   });
 
   ipcMain.handle('ai:chat', async (_event, payload = {}) => {

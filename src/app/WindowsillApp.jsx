@@ -156,6 +156,14 @@ function Island() {
     autoCollapseOnBlur: true,
     alwaysOnTop: true,
     launchAtLogin: false,
+    hotkey: 'Alt+Space',
+    ai: {
+      provider: 'DeepSeek',
+      apiKey: '',
+      baseUrl: 'https://api.deepseek.com/v1',
+      model: 'deepseek-chat',
+      temperature: 0.6
+    },
     userData: ''
   });
   const [thinking, setThinking] = React.useState(false);
@@ -467,6 +475,7 @@ function Island() {
     if (action === 'downloads') await bridge.openDownloads?.();
     if (action === 'calculator') await bridge.openSystemTool?.('calculator');
     if (action === 'notepad') await bridge.openSystemTool?.('notepad');
+    if (action === 'store') await bridge.openUrl?.('ms-windows-store://home');
     if (action === 'ocr') await chooseAndRunOcr();
     if (action === 'screenshot') await takeScreenshot();
     if (action === 'clipboard') await openClipboardPanel();
@@ -552,9 +561,20 @@ function Island() {
   }
 
   function handleFileDragStart(event, file) {
-    if (!file.path) return;
+    if (!file.path) {
+      event.preventDefault();
+      return;
+    }
+
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'copy';
+    }
     event.preventDefault();
-    bridge.startFileDrag?.(file.path);
+    const result = bridge.startFileDrag?.(file.path);
+    if (result?.ok === false) {
+      console.warn('Windowsill file drag failed:', result.error || result.reason || file.path);
+    }
   }
 
   async function restoreClipboardItem(item) {
@@ -709,9 +729,11 @@ function Island() {
   }
 
   async function updateAppSetting(key, value) {
-    const optimistic = { ...appSettings, [key]: value };
+    const optimistic = key === 'ai'
+      ? { ...appSettings, ai: { ...(appSettings.ai || {}), ...value } }
+      : { ...appSettings, [key]: value };
     setAppSettings(optimistic);
-    const result = await bridge.updateSettings?.({ [key]: value });
+    const result = await bridge.updateSettings?.(key === 'ai' ? { ai: value } : { [key]: value });
     if (result?.settings) {
       setAppSettings({ ...result.settings, userData: optimistic.userData });
     }
@@ -744,13 +766,6 @@ function Island() {
     setFocusEndsAt(0);
     setFocusPausedRemaining(0);
     setFocusRemaining(0);
-  }
-
-  async function copyPrompt() {
-    const prompt = '总结暂存文件，提取待办事项，并给出下一步建议。';
-    await navigator.clipboard?.writeText(prompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1200);
   }
 
   async function copyAssistantMessage(message) {
@@ -878,7 +893,6 @@ function Island() {
                     visibleToolIds={visibleToolIds}
                     setVisibleToolIds={setVisibleToolIds}
                     appSettings={appSettings}
-                    copied={copied}
                     copiedMessageId={copiedMessageId}
                     onSendMessage={sendMessage}
                     onCopyMessage={copyAssistantMessage}
@@ -903,7 +917,6 @@ function Island() {
                     onRestoreClipboard={restoreClipboardItem}
                     onStageClipboardImage={stageClipboardImage}
                     onOpenClipboard={openClipboardPanel}
-                    onCopyPrompt={copyPrompt}
                     onSelectSection={setActiveSection}
                     onUpdateAppSetting={updateAppSetting}
                     onOpenDataDir={() => bridge.openDataDir?.()}

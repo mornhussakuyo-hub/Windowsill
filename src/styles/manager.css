@@ -518,6 +518,11 @@
   font-size: 13px;
 }
 
+.path-adder input + input {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+}
+
 .inline-edit-input {
   width: 100%;
   min-width: 100px;
@@ -944,6 +949,27 @@
   padding: 9px;
   border-radius: 8px;
   background: rgba(15, 19, 24, 0.34);
+}
+
+.editable-setting-row {
+  grid-template-columns: auto minmax(0, 0.9fr) minmax(180px, 1.1fr);
+}
+
+.setting-input {
+  min-width: 0;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  outline: 0;
+  border-radius: 999px;
+  padding: 0 11px;
+  background: rgba(8, 12, 16, 0.42);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+}
+
+.setting-input:focus {
+  border-color: rgba(143, 228, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(91, 199, 242, 0.08);
 }
 
 .setting-row strong,

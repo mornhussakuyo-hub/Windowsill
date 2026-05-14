@@ -11,7 +11,11 @@ import {
   FileArchive,
   FolderOpen,
   FolderPlus,
+  Globe2,
   HardDrive,
+  Info,
+  Keyboard,
+  KeyRound,
   Link2,
   ListTodo,
   MessageSquareText,
@@ -22,6 +26,7 @@ import {
   Plus,
   RotateCcw,
   Send,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   Wrench,
@@ -113,39 +118,51 @@ function ShortcutList({ items, compact, onRemove, onRename, onOpen }) {
 }
 
 function FileList({ files, onDragStart, onRemove }) {
+  const openFile = (file) => {
+    if (file.path) bridge.openPath?.(file.path);
+  };
+
   return (
     <div className="file-list manager-file-list">
       {files.length === 0 && <div className="empty-files">暂无文件</div>}
       {files.map((file, index) => (
         <div
           className="file-item"
-          draggable={Boolean(file.path)}
           key={`${file.name}-${index}`}
           data-draggable={Boolean(file.path)}
-          onDragStart={(event) => onDragStart(event, file)}
         >
-          <span className={`file-icon ${file.type}`}>
-            <FileIcon type={file.type} />
-          </span>
-          <button
-            className="file-main"
-            type="button"
-            draggable="false"
-            onClick={() => file.path && bridge.openPath?.(file.path)}
+          <div
+            className="file-drag-zone"
+            role="button"
+            tabIndex={file.path ? 0 : -1}
+            title={file.path || file.name}
+            draggable={Boolean(file.path)}
+            onDragStart={(event) => onDragStart(event, file)}
+            onClick={() => openFile(file)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openFile(file);
+              }
+            }}
           >
-            <strong>{file.name}</strong>
-            <small>{file.size} · {file.time}</small>
-          </button>
+            <span className={`file-icon ${file.type}`}>
+              <FileIcon type={file.type} />
+            </span>
+            <span className="file-main">
+              <strong>{file.name}</strong>
+              <small>{file.size} · {file.time}</small>
+            </span>
+          </div>
           <button
             className="tiny-button"
             type="button"
-            draggable="false"
             title="打开所在位置"
             onClick={() => file.path && bridge.showInFolder?.(file.path)}
           >
             <ArrowUpRight size={14} />
           </button>
-          <button className="tiny-button" type="button" draggable="false" title="移除" onClick={() => onRemove(index)}>
+          <button className="tiny-button" type="button" title="移除" onClick={() => onRemove(index)}>
             <X size={14} />
           </button>
         </div>
@@ -409,24 +426,47 @@ function MessageList({
                   {message.attachments.map((attachment) => (
                     <div
                       className="attachment-card"
-                      draggable={Boolean(attachment.path)}
+                      data-draggable={Boolean(attachment.path)}
                       key={attachment.id || attachment.path || attachment.text}
-                      onDragStart={(event) => {
-                        if (!attachment.path) return;
-                        event.preventDefault();
-                        bridge.startFileDrag?.(attachment.path);
-                      }}
                     >
-                      {attachment.type === 'image' && attachment.preview ? (
-                        <img src={attachment.preview} alt="" />
-                      ) : (
-                        <span className={`file-icon ${attachment.kind || attachment.type}`}>
-                          <FileIcon type={attachment.kind || attachment.type} />
-                        </span>
-                      )}
-                      <div>
-                        <strong>{attachment.name || (attachment.type === 'text' ? '剪贴板文字' : '文件')}</strong>
-                        <small>{attachment.previewText || attachment.path || attachment.text}</small>
+                      <div
+                        className="attachment-drag-zone"
+                        role={attachment.path ? 'button' : undefined}
+                        tabIndex={attachment.path ? 0 : undefined}
+                        draggable={Boolean(attachment.path)}
+                        title={attachment.path || attachment.previewText || attachment.text || attachment.name}
+                        onDragStart={(event) => {
+                          if (!attachment.path) return;
+                          event.stopPropagation();
+                          if (event.dataTransfer) {
+                            event.dataTransfer.effectAllowed = 'copy';
+                          }
+                          event.preventDefault();
+                          const result = bridge.startFileDrag?.(attachment.path);
+                          if (result?.ok === false) {
+                            console.warn('Windowsill attachment drag failed:', result.error || attachment.path);
+                          }
+                        }}
+                        onClick={() => attachment.path && bridge.openPath?.(attachment.path)}
+                        onKeyDown={(event) => {
+                          if (!attachment.path) return;
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            bridge.openPath?.(attachment.path);
+                          }
+                        }}
+                      >
+                        {attachment.type === 'image' && attachment.preview ? (
+                          <img src={attachment.preview} alt="" />
+                        ) : (
+                          <span className={`file-icon ${attachment.kind || attachment.type}`}>
+                            <FileIcon type={attachment.kind || attachment.type} />
+                          </span>
+                        )}
+                        <div>
+                          <strong>{attachment.name || (attachment.type === 'text' ? '剪贴板文字' : '文件')}</strong>
+                          <small>{attachment.previewText || attachment.path || attachment.text}</small>
+                        </div>
                       </div>
                       {attachment.type === 'text' ? (
                         <button
@@ -853,17 +893,51 @@ function SettingToggle({ icon: Icon, title, detail, checked, onChange }) {
   );
 }
 
+function SettingInput({ icon: Icon, title, detail, value, placeholder, type = 'text', onCommit }) {
+  const [draft, setDraft] = useState(value ?? '');
+
+  useEffect(() => {
+    setDraft(value ?? '');
+  }, [value]);
+
+  const commit = () => {
+    const next = type === 'number' ? Number(draft) : String(draft).trim();
+    onCommit(next);
+  };
+
+  return (
+    <div className="setting-row editable-setting-row">
+      <span className="setting-icon"><Icon size={18} /></span>
+      <span><strong>{title}</strong><small>{detail}</small></span>
+      <input
+        className="setting-input"
+        type={type}
+        value={draft}
+        placeholder={placeholder}
+        step={type === 'number' ? '0.1' : undefined}
+        min={type === 'number' ? '0' : undefined}
+        max={type === 'number' ? '2' : undefined}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+      />
+    </div>
+  );
+}
+
 function SettingsWorkbench({
   appSettings,
   files,
-  copied,
   onUpdateAppSetting,
   onOpenDataDir,
   onResetWindowPosition,
   onResetToolLayout,
-  onClearStagedFiles,
-  onCopyPrompt
+  onClearStagedFiles
 }) {
+  const ai = appSettings.ai || {};
+
   return (
     <div className="content-stack">
       <section className="manager-card settings-grid">
@@ -890,6 +964,61 @@ function SettingsWorkbench({
           detail="点击其他窗口后自动回到浮岛"
           checked={Boolean(appSettings.autoCollapseOnBlur)}
           onChange={(value) => onUpdateAppSetting('autoCollapseOnBlur', value)}
+        />
+        <SettingInput
+          icon={Keyboard}
+          title="呼出快捷键"
+          detail="修改后立即重新注册全局快捷键"
+          value={appSettings.hotkey || 'Alt+Space'}
+          placeholder="Alt+Space"
+          onCommit={(value) => onUpdateAppSetting('hotkey', value || 'Alt+Space')}
+        />
+      </section>
+
+      <section className="manager-card settings-grid">
+        <div className="card-head">
+          <div className="section-title"><SlidersHorizontal size={18} /><span>AI 设置</span></div>
+        </div>
+        <SettingInput
+          icon={Bot}
+          title="供应商"
+          detail="例如 DeepSeek、OpenAI 或兼容服务名称"
+          value={ai.provider || ''}
+          placeholder="DeepSeek"
+          onCommit={(value) => onUpdateAppSetting('ai', { provider: value })}
+        />
+        <SettingInput
+          icon={Globe2}
+          title="Base URL"
+          detail="OpenAI 兼容接口地址"
+          value={ai.baseUrl || ''}
+          placeholder="https://api.deepseek.com/v1"
+          onCommit={(value) => onUpdateAppSetting('ai', { baseUrl: value })}
+        />
+        <SettingInput
+          icon={Bot}
+          title="模型"
+          detail="聊天模型名称"
+          value={ai.model || ''}
+          placeholder="deepseek-chat"
+          onCommit={(value) => onUpdateAppSetting('ai', { model: value })}
+        />
+        <SettingInput
+          icon={KeyRound}
+          title="API Key"
+          detail="保存在本机用户数据目录"
+          value={ai.apiKey || ''}
+          placeholder="sk-..."
+          onCommit={(value) => onUpdateAppSetting('ai', { apiKey: value })}
+        />
+        <SettingInput
+          icon={SlidersHorizontal}
+          title="温度"
+          detail="0 到 2，越高越发散"
+          type="number"
+          value={ai.temperature ?? 0.6}
+          placeholder="0.6"
+          onCommit={(value) => onUpdateAppSetting('ai', { temperature: value })}
         />
       </section>
 
@@ -933,25 +1062,25 @@ function SettingsWorkbench({
 
       <section className="manager-card settings-grid">
         <div className="card-head">
-          <div className="section-title"><Bot size={18} /><span>连接状态</span></div>
+          <div className="section-title"><Info size={18} /><span>关于我们</span></div>
         </div>
         <div className="setting-row">
-          <span className="setting-icon"><Bot size={18} /></span>
-          <span><strong>AI 提供商</strong><small>.env 配置，支持 OpenAI 兼容接口</small></span>
-          <span className="soft-tag">DeepSeek / OpenAI</span>
+          <span className="setting-icon"><Sparkles size={18} /></span>
+          <span><strong>Windowsill</strong><small>Windows 桌面智能浮岛助手</small></span>
+          <span className="soft-tag">v0.1.0</span>
         </div>
         <div className="setting-row">
-          <span className="setting-icon"><Zap size={18} /></span>
-          <span><strong>呼出快捷键</strong><small>全局显示或隐藏浮岛</small></span>
-          <span className="soft-tag">Alt Space</span>
-        </div>
-        <div className="setting-row">
-          <span className="setting-icon"><Copy size={18} /></span>
-          <span><strong>常用指令</strong><small>总结暂存文件，提取待办事项，并给出下一步建议。</small></span>
-          <button className="mini-command" type="button" onClick={onCopyPrompt}>
-            {copied ? <Check size={15} /> : <Copy size={15} />}
-            <span>{copied ? '已复制' : '复制'}</span>
+          <span className="setting-icon"><Globe2 size={18} /></span>
+          <span><strong>开源仓库</strong><small>github.com/mornhussakuyo-hub/Windowsill</small></span>
+          <button className="mini-command" type="button" onClick={() => bridge.openUrl?.('https://github.com/mornhussakuyo-hub/Windowsill')}>
+            <ArrowUpRight size={15} />
+            <span>打开</span>
           </button>
+        </div>
+        <div className="setting-row">
+          <span className="setting-icon"><Info size={18} /></span>
+          <span><strong>许可证</strong><small>MIT License</small></span>
+          <span className="soft-tag">Open Source</span>
         </div>
       </section>
     </div>
@@ -985,7 +1114,6 @@ export function ManagerContent({
   visibleToolIds,
   setVisibleToolIds,
   appSettings,
-  copied,
   copiedMessageId,
   onSendMessage,
   onCopyMessage,
@@ -1009,7 +1137,6 @@ export function ManagerContent({
   onHandleAction,
   onRestoreClipboard,
   onStageClipboardImage,
-  onCopyPrompt,
   onSelectSection,
   onUpdateAppSetting,
   onOpenDataDir,
@@ -1161,13 +1288,11 @@ export function ManagerContent({
       <SettingsWorkbench
         appSettings={appSettings}
         files={files}
-        copied={copied}
         onUpdateAppSetting={onUpdateAppSetting}
         onOpenDataDir={onOpenDataDir}
         onResetWindowPosition={onResetWindowPosition}
         onResetToolLayout={onResetToolLayout}
         onClearStagedFiles={onClearStagedFiles}
-        onCopyPrompt={onCopyPrompt}
       />
     );
   }

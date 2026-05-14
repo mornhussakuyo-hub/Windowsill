@@ -66,7 +66,7 @@
 .attachment-card {
   min-width: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 7px;
@@ -74,8 +74,29 @@
   background: rgba(7, 9, 12, 0.28);
 }
 
-.attachment-card[draggable="true"] {
+.attachment-drag-zone {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border-radius: 8px;
+  outline: 0;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+.attachment-card[data-draggable="true"] .attachment-drag-zone {
   cursor: grab;
+}
+
+.attachment-card[data-draggable="true"] .attachment-drag-zone:active {
+  cursor: grabbing;
+}
+
+.attachment-drag-zone:focus-visible {
+  box-shadow: 0 0 0 2px rgba(91, 199, 242, 0.45);
 }
 
 .attachment-card img {
@@ -188,7 +209,7 @@
 .file-item {
   min-height: 48px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   padding: 7px;
@@ -196,12 +217,28 @@
   background: rgba(0, 0, 0, 0.18);
 }
 
-.file-item[data-draggable="true"] {
+.file-drag-zone {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  outline: 0;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+.file-item[data-draggable="true"] .file-drag-zone {
   cursor: grab;
 }
 
-.file-item[data-draggable="true"]:active {
+.file-item[data-draggable="true"] .file-drag-zone:active {
   cursor: grabbing;
+}
+
+.file-drag-zone:focus-visible {
+  box-shadow: 0 0 0 2px rgba(91, 199, 242, 0.45);
 }
 
 .empty-files {

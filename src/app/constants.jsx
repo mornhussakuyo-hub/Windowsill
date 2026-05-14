@@ -11,6 +11,7 @@ import {
   Link2,
   ListTodo,
   NotebookPen,
+  ShoppingBag,
   Settings,
   TimerReset,
   Wrench
@@ -61,6 +62,7 @@ export const quickActions = [
   { icon: Aperture, label: '截图', action: 'screenshot', direct: true },
   { icon: Calculator, label: '计算器', action: 'calculator', direct: true },
   { icon: NotebookPen, label: '记事本', action: 'notepad', direct: true },
+  { icon: ShoppingBag, label: 'Store', action: 'store', direct: true },
   { icon: Languages, label: '翻译', action: 'translate', page: 'translate' },
   { icon: FileText, label: 'OCR', action: 'ocr', direct: true },
   { icon: Clipboard, label: '剪贴板', action: 'clipboard', page: 'clipboard' },
