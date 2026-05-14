@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run build
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Windowsill ${{ github.ref_name }}
+          body: |
+            Windowsill ${{ github.ref_name }}
+
+            - Stabilized native file drag from the stash and AI attachments.
+            - Added richer settings for AI provider, Base URL, API key, temperature, and hotkey.
+            - Added Microsoft Store tool entry and UI polish for shortcut inputs.
+          files: |
+            release/Windowsill-Setup-*.exe
+            release/Windowsill-Setup-*.exe.blockmap
+            release/latest.yml
